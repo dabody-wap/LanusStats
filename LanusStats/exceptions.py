@@ -18,9 +18,9 @@ class PlayerDoesntHaveInfo(Exception):
         super().__init__(self.message)
 
 class MatchDoesntHaveInfo(Exception):
-    def __init__(self, path):
-        self.message = f"Match in path {path} doesn't have enough information for this functions, try with another one.\nEl partido en el path {path} no tiene la información para estas funciones, pruebe con otro."
-        super().__init__(self.message)
+    def __init__(self, msg="Match does not have enough info"):
+        super().__init__(msg)
+
         
 class InvalidStrType(Exception):
     def __init__(self, param):
