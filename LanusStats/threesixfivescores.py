@@ -652,17 +652,19 @@ class ThreeSixFiveScores:
         return home, away
     
     def get_league_top_players_stats_by_id(self, league_id, season: Optional[str] = None) -> pd.DataFrame:
+        """
+        Fetch top players stats for a league using league ID and optional season.
+        Returns a flattened DataFrame ready for display/analysis with human-readable stat names.
+        """
         if isinstance(league_id, str) and league_id.isdigit():
             league_id = int(league_id)
 
-        print(f"Fetching stats for league_id={league_id}, season={season}")
         try:
             url = (f'https://webws.365scores.com/web/stats/?appTypeId=5&langId=1'
                 f'&timezoneName=America/Buenos_Aires&userCountryId=382&competitions={league_id}')
             if season:
                 url += f'&seasonId={season}'
 
-            print(f"Requesting URL: {url}")
             response = self.session.get(url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
             time.sleep(self.delay)
@@ -671,22 +673,14 @@ class ThreeSixFiveScores:
             print(f"Request or JSON error: {e}")
             return pd.DataFrame()
 
-        if 'stats' not in stats_data:
-            print("No 'stats' key in response")
-            return pd.DataFrame()
-
-        # التأكد من وجود athletesStats
-        if 'athletesStats' not in stats_data['stats']:
-            print("'athletesStats' key not found in stats")
-            # اطبع الـ keys المتاحة للمراجعة
-            print("Available stats keys:", stats_data['stats'])
+        if 'stats' not in stats_data or 'athletesStats' not in stats_data['stats']:
             return pd.DataFrame()
 
         athletes_stats = stats_data['stats']['athletesStats']
         if not athletes_stats:
-            print("'athletesStats' is empty")
             return pd.DataFrame()
 
+        # تجميع كل الـ stats في DataFrame واحد
         total_df = pd.DataFrame()
         for i, stat_group in enumerate(athletes_stats):
             stats_df = self.parse_dataframe(stat_group)
@@ -694,11 +688,75 @@ class ThreeSixFiveScores:
                 total_df = pd.concat([total_df, stats_df], ignore_index=True)
 
         if total_df.empty:
-            print("Final DataFrame is empty after parsing athletesStats")
-        else:
-            print(f"Successfully fetched stats: {total_df.shape[0]} rows")
+            return total_df
+
+        # ===== Flatten entity =====
+        total_df['player_id'] = total_df['entity'].apply(lambda x: x.get('id') if isinstance(x, dict) else None)
+        total_df['player_name'] = total_df['entity'].apply(lambda x: x.get('name') if isinstance(x, dict) else None)
+        total_df = total_df.drop(columns=['entity'])
+
+        # ===== Flatten stats =====
+        def flatten_stats(stats_list):
+            if isinstance(stats_list, list):
+                return {f"type_{d['typeId']}": d['value'] for d in stats_list if 'typeId' in d and 'value' in d}
+            return {}
+
+        stats_expanded = total_df['stats'].apply(flatten_stats).apply(pd.Series)
+        total_df = pd.concat([total_df.drop(columns=['stats']), stats_expanded], axis=1)
+
+        # ===== Map type_X to human-readable names =====
+        type_name_map = {
+            1: "Goals",
+            2: "Assists",
+            3: "Shots",
+            4: "Minutes Played",
+            5: "Own Goals",
+            6: "Penalties Missed",
+            7: "Shots on Target",
+            10: "Penalties Scored",
+            12: "Yellow Cards",
+            14: "Red Cards",
+            15: "Touches",
+            16: "Passes",
+            17: "Accurate Passes",
+            18: "Key Passes",
+            21: "Dribbles Attempted",
+            22: "Dribbles Completed",
+            24: "Tackles",
+            27: "Saves",
+            28: "Goals Conceded",
+            31: "Offsides",
+            33: "Fouls Suffered",
+            36: "Tackles Won",
+            38: "Interceptions Won",
+            40: "Dribbled Past",
+            41: "Chances Created",
+            43: "Big Chances Missed",
+            44: "Dribbles Completed",
+            46: "Passes Into Final Third",
+            49: "Duels Won",
+            50: "Duels Lost",
+            54: "Fouls Conceded",
+            56: "Successful Pressures",
+            57: "Unsuccessful Pressures",
+            58: "Recoveries",
+            60: "Touches in Box",
+            61: "Passes in Box",
+            62: "Goals in Box",
+            64: "Corners Won",
+            65: "Corners Conceded"
+        }
+
+
+        rename_dict = {f"type_{k}": v for k, v in type_name_map.items() if f"type_{k}" in stats_expanded.columns}
+        total_df = total_df.rename(columns=rename_dict)
+
+        # ===== ترتيب الأعمدة =====
+        columns_order = ['position', 'stat_category', 'secondaryStatName', 'player_id', 'player_name'] + list(rename_dict.values())
+        total_df = total_df[columns_order]
 
         return total_df
+
 
 
     def get_league_top_players_stats(self, league_name: str, season: Optional[str] = None) -> pd.DataFrame:
@@ -1183,3 +1241,4 @@ class ThreeSixFiveScores:
         return home, away
 
     
+
