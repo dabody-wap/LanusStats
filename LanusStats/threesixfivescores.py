@@ -679,8 +679,8 @@ class ThreeSixFiveScores:
             return pd.DataFrame()
 
         # اطبع مثال لأول category علشان تتأكد
-        print("Available stat categories:", [cat.get("name") for cat in athletes_stats])
-        print("Sample statsTypes:", athletes_stats[0].get("statsTypes", []))
+        #print("Available stat categories:", [cat.get("name") for cat in athletes_stats])
+        #print("Sample statsTypes:", athletes_stats[0].get("statsTypes", []))
 
 
         all_dfs = []
@@ -1269,5 +1269,6 @@ class ThreeSixFiveScores:
         return home, away
 
     
+
 
 
