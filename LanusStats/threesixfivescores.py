@@ -652,10 +652,6 @@ class ThreeSixFiveScores:
         return home, away
     
     def get_league_top_players_stats_by_id(self, league_id, season: Optional[str] = None) -> pd.DataFrame:
-        """
-        Fetch top players stats for a league using league ID and optional season.
-        Returns a flattened DataFrame ready for display/analysis with human-readable stat names.
-        """
         if isinstance(league_id, str) and league_id.isdigit():
             league_id = int(league_id)
 
@@ -669,26 +665,58 @@ class ThreeSixFiveScores:
             response.raise_for_status()
             time.sleep(self.delay)
             stats_data = response.json()
-        except (requests.RequestException, json.JSONDecodeError) as e:
-            print(f"Request or JSON error: {e}")
+        except Exception as e:
+            print(f"Error fetching stats: {e}")
             return pd.DataFrame()
 
         if 'stats' not in stats_data or 'athletesStats' not in stats_data['stats']:
+            print("No athletesStats found")
             return pd.DataFrame()
 
         athletes_stats = stats_data['stats']['athletesStats']
         if not athletes_stats:
+            print("athletesStats is empty")
             return pd.DataFrame()
 
-        # تجميع كل الـ stats في DataFrame واحد
-        total_df = pd.DataFrame()
-        for i, stat_group in enumerate(athletes_stats):
-            stats_df = self.parse_dataframe(stat_group)
-            if not stats_df.empty:
-                total_df = pd.concat([total_df, stats_df], ignore_index=True)
+        # اطبع مثال لأول category علشان تتأكد
+        print("Available stat categories:", [cat.get("name") for cat in athletes_stats])
+        print("Sample statsTypes:", athletes_stats[0].get("statsTypes", []))
 
-        if total_df.empty:
-            return total_df
+
+        all_dfs = []
+
+        for category in athletes_stats:
+            category_name = category.get("name", "Unknown")
+            stats_types = category.get("statsTypes", [])
+            rows = category.get("rows", [])
+
+            # ابني mapping: typeId -> اسم الإحصائية
+            type_map = {st.get("id") or st.get("typeId"): st.get("name") 
+            for st in stats_types if ("id" in st or "typeId" in st) and "name" in st}
+            print(type_map)
+        
+            for row in rows:
+                player_info = {
+                    "player_id": row["entity"]["id"],
+                    "player_name": row["entity"]["name"],
+                    "stat_category": category_name,
+                }
+
+                # حول القيم لقاموس باسم العمود
+                for stat in row.get("stats", []):
+                    t_id = stat.get("typeId")
+                    val = stat.get("value")
+                    col_name = type_map.get(t_id, f"type_{t_id}")
+                    player_info[col_name] = val
+
+                all_dfs.append(player_info)
+
+        if not all_dfs:
+            print("No player stats extracted")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_dfs)
+        return df
 
         # ===== Flatten entity =====
         total_df['player_id'] = total_df['entity'].apply(lambda x: x.get('id') if isinstance(x, dict) else None)
@@ -1241,4 +1269,5 @@ class ThreeSixFiveScores:
         return home, away
 
     
+
 
